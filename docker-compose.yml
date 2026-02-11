@@ -1,16 +1,16 @@
 services:
   traefik:
-    container_name: ${POD_NAME}
-    hostname: ${POD_HOSTNAME}
-    image: ${POD_IMAGE}
+    container_name: traefik
+    hostname: traefik
+    image: zzci/traefik
     restart: always
     ports:
       - 0.0.0.0:80:80
       - 0.0.0.0:443:443/tcp
     networks:
-      - traefik
+      traefik:
+        ipv4_address: 172.18.0.2
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./ssl:/ssl
       - ./services:/services
       - ./log:/log
@@ -34,9 +34,8 @@ services:
       - --entrypoints.http.http.redirections.entrypoint.scheme=https
       - --entrypoints.http.http.redirections.entrypoint.to=https
       ## plugins
-      - --experimental.localPlugins.jwt.modulename=github.com/traefik-plugins/traefik-jwt-plugin
-      - --experimental.localPlugins.real-ip.modulename=github.com/zzci/traefik-real-ip
-      - --experimental.localPlugins.fail2ban.modulename=github.com/tomMoulard/fail2ban
+      - --experimental.localPlugins.oidc.modulename=oidc
+      - --experimental.localPlugins.realIp.modulename=real-ip
       ## certificates
       ### acme http challenge
       - --certificatesresolvers.default.acme.httpchallenge=true
@@ -50,9 +49,6 @@ services:
       - --certificatesresolvers.dns.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.dns.acme.storage=/ssl/acme.json
       ## providers
-      ### docker
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
       ### file
       - --providers.file.directory=/services
       - --providers.file.watch=true
@@ -63,18 +59,10 @@ services:
       # - --providers.http.tls.cert=/ssl/client.crt
       # - --providers.http.tls.key=/ssl/client.key
 
-    labels:
-      traefik.enable: true
-      traefik.http.middlewares.ip-list.ipwhitelist.sourcerange: '${TRAEFIK_IPLIST}'
-      traefik.http.routers.dashboard.middlewares: 'ip-list'
-      traefik.http.routers.dashboard.entrypoints: 'https'
-      traefik.http.routers.dashboard.tls: true
-      # traefik.http.routers.dashboard.tls.certResolver: default
-      traefik.http.routers.dashboard.rule: 'Host(`${TRAEFIK_DASHBOARD}`)'
-      traefik.http.routers.dashboard.service: 'api@internal'
-      # fix miss port error.
-      traefik.http.services.dashboard.loadbalancer.server.port: 8080
 
 networks:
   traefik:
-    name: ${TRAEFIK_NETWORK}
+    name: traefik
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16

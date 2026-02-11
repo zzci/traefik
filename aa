@@ -1,55 +1,67 @@
-#!/bin/bash
+#!/bin/sh
 
-PWD="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+# Get the current working directory
+PWD="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P)"
 
-if [ ! -f $PWD/.env ]; then
-    cp $PWD/.env.example $PWD/.env
+# Copy env.example or .env.example to .env if .env does not exist
+if [ ! -f "$PWD/.env" ]; then
+    if [ -f "$PWD/env.example" ]; then
+        cp "$PWD/env.example" "$PWD/.env" 2>/dev/null
+    elif [ -f "$PWD/.env.example" ]; then
+        cp "$PWD/.env.example" "$PWD/.env" 2>/dev/null
+    fi
 fi
 
-source $PWD/.env
+# Load the .env file if it exists
+[ -f "$PWD/.env" ] && . "$PWD/.env"
 
-NAME=$POD_NAME
-EXEC="sh"
+# Set the name and default exec command
+NAME=${POD_NAME:-$(basename "$PWD")}
+EXEC=${EXEC_COMMAND:-"sh"}
 
-## check docker running.
-docker_state=$(docker info >/dev/null 2>&1)
-while [ $? -ne 0 ]
-do
-    echo "Docker does not seem to be running, sleep 2.."
-    sleep 2
-done
-
-## some init scripts.
-
-[ "$1" = "init" ] && {
-    echo 'init.'
+# Action functions
+action_build() {
+    docker build --rm -t "$NAME" .
 }
 
-[ "$1" = "" ] && {
-    docker build --rm -t $NAME .
+action_pack() {
+    docker save $NAME | gzip > $NAME.gz
 }
 
-[ "$1" = "test" ] && {
-    docker run --rm -ti $NAME --log.level=debug \
-    --experimental.localPlugins.traefik-auth.modulename=github.com/zzci/traefik-auth \
-    --experimental.localPlugins.fail2ban.modulename=github.com/tomMoulard/fail2ban \
-    --experimental.localPlugins.traefik-real-ip.modulename=github.com/soulbalz/traefik-real-ip
+action_rm() {
+    docker compose down
 }
 
-[ "$1" = "rm" ] && {
-    docker-compose down
+action_restart() {
+    docker compose restart
 }
 
-[ "$1" = "e" ] && {
-    if [ "$2" != "" ]; then
-        EXEC=$2
-    fi
-    docker exec -ti $NAME $EXEC
+action_exec() {
+    [ -n "$1" ] && EXEC="$1"
+    docker compose exec -ti traefik "$EXEC"
 }
 
-[ "$1" = "run" ] && {
-    docker-compose down
-    docker-compose up -d
+action_run() {
+    docker compose down
+    docker compose up -d
 }
 
-exit 0
+# Set the default action to "build" if none is provided
+action=${1:-run}
+if [ "$#" -gt 1 ]; then
+  shift
+fi
+
+# Function to check if a function exists
+function_exists() {
+    type "$1" >/dev/null 2>&1
+}
+
+# Call the action function if it exists, otherwise show an error
+if function_exists "action_$action"; then
+    "action_$action" "$@"
+else
+    echo "Error: Unknown action: '$action'"
+    echo "Usage: $0 <action> <args>"
+    exit 1
+fi
