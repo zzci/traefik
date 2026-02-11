@@ -34,8 +34,8 @@ services:
       - --entrypoints.http.http.redirections.entrypoint.scheme=https
       - --entrypoints.http.http.redirections.entrypoint.to=https
       ## plugins
-      - --experimental.localPlugins.oidc.modulename=oidc
-      - --experimental.localPlugins.realIp.modulename=real-ip
+      - --experimental.localPlugins.oidc.modulename=github.com/sevensolutions/traefik-oidc-auth
+      - --experimental.localPlugins.realIp.modulename=github.com/Paxxs/traefik-get-real-ip
       ## certificates
       ### acme http challenge
       - --certificatesresolvers.default.acme.httpchallenge=true
