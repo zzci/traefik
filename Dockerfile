@@ -1,4 +1,4 @@
-FROM traefik:v3.6.8
+FROM traefik:v3.6.9
 
 WORKDIR /usr/local/bin/
 
@@ -13,6 +13,8 @@ RUN \
     wget -qO "/tmp/oidc.tar.gz" https://github.com/sevensolutions/traefik-oidc-auth/archive/refs/tags/v0.18.0.tar.gz; \
     mkdir -p /usr/local/bin/plugins-local/src/github.com/sevensolutions/traefik-oidc-auth; \
     tar zxf /tmp/oidc.tar.gz --strip-components=1 -C /usr/local/bin/plugins-local/src/github.com/sevensolutions/traefik-oidc-auth; \
+    ## patch: use SessionCookie.Domain for CodeVerifier cookie instead of CallbackURL.Host
+    sed -i 's/Domain:   toa.CallbackURL.Host,/Domain:   toa.Config.SessionCookie.Domain,/g' /usr/local/bin/plugins-local/src/github.com/sevensolutions/traefik-oidc-auth/src/main.go; \
     ## real-ip
     wget -qO "/tmp/real-ip.tar.gz" https://github.com/Paxxs/traefik-get-real-ip/archive/refs/tags/v1.0.4.tar.gz; \
     mkdir -p /usr/local/bin/plugins-local/src/github.com/Paxxs/traefik-get-real-ip; \
