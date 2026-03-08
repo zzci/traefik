@@ -1,0 +1,7 @@
+# IP allow list
+http:
+  middlewares:
+    ipauth:
+      IPAllowList:
+        sourceRange:
+          - 127.0.0.1

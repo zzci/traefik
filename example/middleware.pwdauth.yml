@@ -1,0 +1,8 @@
+# Basic auth, generate with: htpasswd -nbB admin admin
+http:
+  middlewares:
+    pwdauth:
+      basicAuth:
+        removeHeader: true
+        users:
+          - admin:$2y$05$hl9BnvNyK3JyukJGtiuLDuRWtKoPhS1vZdw7kDXwwb482zPlgfBbq

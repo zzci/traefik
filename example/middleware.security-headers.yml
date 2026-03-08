@@ -1,0 +1,11 @@
+# Security headers
+http:
+  middlewares:
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        stsIncludeSubdomains: true
+        stsSeconds: 31536000
+        referrerPolicy: strict-origin-when-cross-origin

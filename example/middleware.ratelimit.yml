@@ -1,0 +1,8 @@
+# Rate limiting
+http:
+  middlewares:
+    ratelimit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1s

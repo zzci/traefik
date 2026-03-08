@@ -1,0 +1,8 @@
+# Redirect www to non-www
+http:
+  middlewares:
+    www-redirect:
+      redirectRegex:
+        regex: ^https://www\.(.*)
+        replacement: https://${1}
+        permanent: true

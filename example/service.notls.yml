@@ -1,0 +1,13 @@
+# HTTP service without TLS (plain HTTP only, no HTTPS)
+http:
+  routers:
+    internal:
+      rule: Host(`internal.demo.io`)
+      service: internal
+      entryPoints:
+        - http
+  services:
+    internal:
+      loadBalancer:
+        servers:
+          - url: http://internal:8080

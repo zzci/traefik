@@ -1,0 +1,15 @@
+# TCP service with TLS passthrough (e.g. database, MQTT, custom protocol)
+tcp:
+  routers:
+    mysql:
+      rule: HostSNI(`db.demo.io`)
+      service: mysql
+      entryPoints:
+        - https
+      tls:
+        passthrough: true
+  services:
+    mysql:
+      loadBalancer:
+        servers:
+          - address: mysql:3306

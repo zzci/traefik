@@ -1,0 +1,17 @@
+# Traefik dashboard with ACME DNS challenge certificate (wildcard support)
+# For regular services: change service to your service name and add services section
+http:
+  routers:
+    dashboard:
+      rule: Host(`traefik.demo.io`)
+      service: api@internal
+      middlewares:
+        - pwdauth
+      entryPoints:
+        - https
+      tls:
+        certResolver: dns
+        domains:
+          - main: demo.io
+            sans:
+              - '*.demo.io'

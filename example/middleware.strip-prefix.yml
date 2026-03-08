@@ -1,0 +1,7 @@
+# Strip path prefix
+http:
+  middlewares:
+    strip-prefix:
+      stripPrefix:
+        prefixes:
+          - /api

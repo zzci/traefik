@@ -1,0 +1,17 @@
+# HTTP service with ACME HTTP challenge certificate (default resolver)
+http:
+  routers:
+    webapp:
+      rule: Host(`webapp.demo.io`)
+      service: webapp
+      middlewares:
+        - ipauth
+      entryPoints:
+        - https
+      tls:
+        certResolver: default
+  services:
+    webapp:
+      loadBalancer:
+        servers:
+          - url: http://webapp:3000

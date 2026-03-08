@@ -1,0 +1,18 @@
+# Custom request/response headers
+http:
+  middlewares:
+    custom-headers:
+      headers:
+        # Override Host header sent to upstream
+        customRequestHeaders:
+          Host: upstream.internal.io
+          # Remove X-Forwarded-* headers (set value to '' to delete)
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Port: ''
+          X-Forwarded-Proto: ''
+          X-Forwarded-Server: ''
+          X-Real-Ip: ''
+        customResponseHeaders:
+          X-Powered-By: ''
+          Server: ''

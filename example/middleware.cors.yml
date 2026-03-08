@@ -1,0 +1,19 @@
+# CORS headers
+http:
+  middlewares:
+    cors:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+        accessControlAllowOriginList:
+          - https://demo.io
+          - https://*.demo.io
+        accessControlMaxAge: 86400
+        addVaryHeader: true

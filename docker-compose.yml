@@ -9,60 +9,22 @@ services:
       - 0.0.0.0:443:443/tcp
     networks:
       traefik:
-        ipv4_address: 172.18.0.2
+        ipv4_address: ${TRAEFIK_IPV4:-172.18.0.2}
     volumes:
-      - ./ssl:/ssl
+      - ./data:/data
       - ./services:/services
-      - ./log:/log
+    command:
+      - --configFile=/data/traefik.yml
+      - --certificatesresolvers.default.acme.email=${ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.dns.acme.email=${ACME_EMAIL:-admin@example.com}
     environment:
       LEGO_DISABLE_CNAME_SUPPORT: ${ACME_DISABLE_CNAME:-true}
-      ACME_DNS_API_BASE: ${ACME_DNS_API}
-      ACME_DNS_STORAGE_PATH: '/ssl/acme-dns.json'
-    command:
-      - --global.checknewversion=false
-      - --global.sendanonymoususage=false
-      - --api.dashboard
-      ## log
-      - --log=${TRAEFIK_LOG:-true}
-      - --log.level=${TRAEFIK_LOG_LEVEL:-error}
-      - --log.filepath=/log/proxy.log
-      - --accesslog=${TRAEFIK_ACCESS_LOG:-false}
-      - --accesslog.filepath=/log/access.log
-      ## endpoints
-      - --entrypoints.http.address=:80
-      - --entrypoints.https.address=:443
-      - --entrypoints.http.http.redirections.entrypoint.scheme=https
-      - --entrypoints.http.http.redirections.entrypoint.to=https
-      ## plugins
-      - --experimental.localPlugins.oidc.modulename=github.com/sevensolutions/traefik-oidc-auth
-      - --experimental.localPlugins.realIp.modulename=github.com/Paxxs/traefik-get-real-ip
-      ## certificates
-      ### acme http challenge
-      - --certificatesresolvers.default.acme.httpchallenge=true
-      - --certificatesresolvers.default.acme.httpchallenge.entrypoint=http
-      - --certificatesresolvers.default.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.default.acme.storage=/ssl/acme.json
-      ### acme dns challenge
-      - --certificatesresolvers.dns.acme.dnschallenge=true
-      - --certificatesresolvers.dns.acme.dnschallenge.provider=acme-dns
-      - --certificatesresolvers.dns.acme.dnschallenge.resolvers=${ACME_DNS_RESOLVERS:-1.1.1.1:53,8.8.8.8:53}
-      - --certificatesresolvers.dns.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.dns.acme.storage=/ssl/acme.json
-      ## providers
-      ### file
-      - --providers.file.directory=/services
-      - --providers.file.watch=true
-      ### http
-      # - --providers.http.endpoint=https://demo.io/config
-      # - --providers.http.pollInterval=10s
-      # - --providers.http.pollTimeout=60s
-      # - --providers.http.tls.cert=/ssl/client.crt
-      # - --providers.http.tls.key=/ssl/client.key
-
+      ACME_DNS_API_BASE: ${ACME_DNS_API:-https://auth.acme-dns.io}
+      ACME_DNS_STORAGE_PATH: '/data/ssl/acme-dns.json'
 
 networks:
   traefik:
-    name: traefik
+    name: ${TRAEFIK_NETWORK:-traefik}
     ipam:
       config:
-        - subnet: 172.18.0.0/16
+        - subnet: ${TRAEFIK_SUBNET:-172.18.0.0/16}

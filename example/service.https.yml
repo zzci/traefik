@@ -1,0 +1,18 @@
+# HTTPS service (upstream is also HTTPS, skip TLS verification)
+http:
+  serversTransports:
+    insecure:
+      insecureSkipVerify: true
+  routers:
+    myapp:
+      rule: Host(`myapp.demo.io`)
+      service: myapp
+      entryPoints:
+        - https
+      tls: true
+  services:
+    myapp:
+      loadBalancer:
+        serversTransport: insecure
+        servers:
+          - url: https://myapp:8443
