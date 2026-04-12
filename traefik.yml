@@ -33,6 +33,8 @@ experimental:
   localPlugins:
     oidc:
       moduleName: github.com/sevensolutions/traefik-oidc-auth
+    accessAuth:
+      moduleName: github.com/zzci/access-auth
     realIp:
       moduleName: github.com/Paxxs/traefik-get-real-ip
 
