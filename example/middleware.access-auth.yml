@@ -1,0 +1,25 @@
+# Forward authentication via remote authorization service
+# Chain with OIDC middleware: oidc handles login, access-auth handles authorization
+http:
+  middlewares:
+    access-auth:
+      plugin:
+        accessAuth:
+          # Remote authorization endpoint
+          Url: https://auth-api.demo.io/authorize
+          # Cookie encryption secret (32 chars), generate with: openssl rand -hex 16
+          Secret: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+          # API key for authenticating with the remote service
+          AuthHeaderName: Authorization
+          AuthHeaderValue: "Bearer your-service-token"
+          # Map JSON field names to request headers
+          SendHeaders:
+            sub: X-Remote-User
+            email: X-Remote-Email
+            groups: X-Remote-Groups
+            ip: X-Forwarded-For
+            host: Host
+          # Cache cookie settings
+          CacheCookie:
+            Enabled: true
+            Domain: '.demo.io'
