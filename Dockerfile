@@ -16,7 +16,7 @@ RUN \
     ## patch: use SessionCookie.Domain for CodeVerifier cookie instead of CallbackURL.Host
     sed -i 's/Domain:   toa.CallbackURL.Host,/Domain:   toa.Config.SessionCookie.Domain,/g' /usr/local/bin/plugins-local/src/github.com/sevensolutions/traefik-oidc-auth/src/main.go; \
     ## access-auth
-    wget -qO "/tmp/access-auth.tar.gz" https://github.com/zzci/access-auth/archive/refs/tags/v1.0.0.tar.gz; \
+    wget -qO "/tmp/access-auth.tar.gz" https://github.com/zzci/access-auth/archive/refs/tags/v1.0.1.tar.gz; \
     mkdir -p /usr/local/bin/plugins-local/src/github.com/zzci/access-auth; \
     tar zxf /tmp/access-auth.tar.gz --strip-components=1 -C /usr/local/bin/plugins-local/src/github.com/zzci/access-auth; \
     ## real-ip
