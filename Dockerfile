@@ -1,4 +1,4 @@
-FROM traefik:v3.6.10
+FROM traefik:v3.6.13
 
 WORKDIR /usr/local/bin/
 
