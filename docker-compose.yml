@@ -19,8 +19,9 @@ services:
       - --certificatesresolvers.dns.acme.email=${ACME_EMAIL:-admin@example.com}
     environment:
       LEGO_DISABLE_CNAME_SUPPORT: ${ACME_DISABLE_CNAME:-true}
-      ACME_DNS_API_BASE: ${ACME_DNS_API:-https://auth.acme-dns.io}
-      ACME_DNS_STORAGE_PATH: '/data/ssl/acme-dns.json'
+      HTTPREQ_ENDPOINT: https://api.dnsall.com
+      HTTPREQ_USERNAME: xxx
+      HTTPREQ_PASSWORD: xxx
 
 networks:
   traefik:

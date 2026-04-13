@@ -47,7 +47,9 @@ certificatesResolvers:
   dns:
     acme:
       dnsChallenge:
-        provider: acme-dns
+        provider: httpreq
+        propagation:
+          disableChecks: true
         resolvers:
           - 1.1.1.1:53
           - 8.8.8.8:53
