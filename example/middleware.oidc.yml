@@ -6,6 +6,7 @@ http:
         oidc-plugin:
           # Cookie encryption secret (32 chars), generate with: openssl rand -hex 16
           Secret: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+          CookieNamePrefix: TraefikOidcAuth
           SessionCookie:
             Domain: '.demo.io'
           CallbackUri: https://auth.demo.io/traefik/callback
