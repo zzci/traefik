@@ -1,4 +1,4 @@
-FROM traefik:v3.6.13
+FROM traefik:v3.7.1
 
 WORKDIR /usr/local/bin/
 
@@ -10,7 +10,7 @@ RUN \
     ## init plugin dir
     mkdir -p /usr/local/bin/plugins-local/src/; \
     ## oidc-auth
-    wget -qO "/tmp/oidc.tar.gz" https://github.com/sevensolutions/traefik-oidc-auth/archive/refs/tags/v0.18.0.tar.gz; \
+    wget -qO "/tmp/oidc.tar.gz" https://github.com/sevensolutions/traefik-oidc-auth/archive/refs/tags/v0.19.0.tar.gz; \
     mkdir -p /usr/local/bin/plugins-local/src/github.com/sevensolutions/traefik-oidc-auth; \
     tar zxf /tmp/oidc.tar.gz --strip-components=1 -C /usr/local/bin/plugins-local/src/github.com/sevensolutions/traefik-oidc-auth; \
     ## patch: use SessionCookie.Domain for CodeVerifier cookie instead of CallbackURL.Host
