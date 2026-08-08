@@ -1,0 +1,32 @@
+# ForwardAuth service configuration template (optional).
+# For simple setups, AUTH_* environment variables in docker-compose.yml are
+# enough — see README "Local Auth". For full control, copy this file to
+# ./data/auth.yml (read as /data/auth.yml inside the traefik container).
+# AUTH_* environment variables override individual fields from this file.
+
+# 2nd-level domain: session cookie covers all its subdomains,
+# and post-login redirects are restricted to it.
+domain: example.com
+
+# Optional. Cookie name (default "_auth"). __Host-/__Secure- prefixes rejected.
+# cookie_name: _auth
+
+# Optional. Public host of this service (default "auth.<domain>").
+# Unauthenticated browsers are redirected to https://<auth_host>/login.
+# auth_host: auth.example.com
+
+# Optional. Defaults shown (listen/data_dir defaults suit the bundled setup).
+# listen: "127.0.0.1:9091"
+# data_dir: /data/auth     # HMAC secret persisted here (auto-generated)
+# session_ttl: 24h
+
+# Brute-force protection: failed logins per IP and per username.
+# login_rate_limit:
+#   attempts: 5
+#   window: 5m
+
+users:
+  # Generate the hash with: docker exec -it traefik auth hash
+  - username: admin
+    password_hash: "$2a$12$REPLACE_ME"
+    groups: [admin]

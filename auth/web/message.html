@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f3f4f6; display: flex;
+         align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+  main { background: #fff; padding: 2rem; border-radius: 8px; width: 20rem; text-align: center;
+         box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+  p { color: #374151; margin: 0 0 1rem; }
+  a { color: #111827; }
+</style>
+</head>
+<body>
+<main>
+  <h1>{{.Title}}</h1>
+  <p>{{.Text}}</p>
+  {{if .LinkHref}}<a href="{{.LinkHref}}">{{.LinkText}}</a>{{end}}
+</main>
+</body>
+</html>

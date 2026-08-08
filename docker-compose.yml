@@ -8,24 +8,26 @@ services:
       - 0.0.0.0:80:80
       - 0.0.0.0:443:443/tcp
     networks:
-      traefik:
-        ipv4_address: ${TRAEFIK_IPV4:-172.18.0.2}
+      - traefik
     volumes:
       - ./data:/data
       - ./services:/services
-    command:
-      - --configFile=/data/traefik.yml
-      - --certificatesresolvers.default.acme.email=${ACME_EMAIL:-admin@example.com}
-      - --certificatesresolvers.dns.acme.email=${ACME_EMAIL:-admin@example.com}
     environment:
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
       LEGO_DISABLE_CNAME_SUPPORT: ${ACME_DISABLE_CNAME:-true}
       HTTPREQ_ENDPOINT: https://api.dnsall.com
       HTTPREQ_USERNAME: xxx
       HTTPREQ_PASSWORD: xxx
+      ## Built-in ForwardAuth login service (see auth/), disabled by default.
+      ## Uncomment to enable; secret is a bcrypt hash ($ escaped as $$,
+      ## generate with: docker exec -it traefik auth hash) or a plaintext
+      ## password (no ":" or ","). Optional base config: ./data/auth.yml;
+      ## AUTH_* vars override fields from the file.
+      # ZSRV_auth: "true"
+      # AUTH_DOMAIN: example.com
+      # AUTH_COOKIE_NAME: _auth
+      # AUTH_USERS: "admin:$$2a$$12$$replace_me:admin"
 
 networks:
   traefik:
-    name: ${TRAEFIK_NETWORK:-traefik}
-    ipam:
-      config:
-        - subnet: ${TRAEFIK_SUBNET:-172.18.0.0/16}
+    external: true

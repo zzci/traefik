@@ -1,0 +1,16 @@
+# Route for the built-in auth service login page (see auth/).
+# The auth host itself must NOT use the fwdauth middleware.
+http:
+  routers:
+    auth:
+      entryPoints:
+        - https
+      rule: Host(`auth.example.com`)
+      service: auth
+      tls:
+        certResolver: default
+  services:
+    auth:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:9091

@@ -1,4 +1,16 @@
-FROM traefik:v3.7.5
+FROM golang:1.25-alpine AS auth-build
+
+WORKDIR /src
+COPY auth/go.mod auth/go.sum ./
+RUN go mod download
+COPY auth/ .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/auth .
+
+FROM zzci/ubase
+
+# Any traefik release works, including older v2.x (same asset naming).
+ARG TRAEFIK_VERSION=v3.7.5
+ARG TARGETARCH
 
 WORKDIR /usr/local/bin/
 
@@ -6,7 +18,13 @@ EXPOSE 80 443
 
 RUN \
     ## install htpasswd
-    apk add --no-cache openssl ca-certificates apache2-utils; \
+    apt-get update && \
+    apt-get install -y --no-install-recommends apache2-utils && \
+    rm -rf /var/lib/apt/lists/*; \
+    ## traefik binary
+    wget -qO /tmp/traefik.tar.gz "https://github.com/traefik/traefik/releases/download/${TRAEFIK_VERSION}/traefik_${TRAEFIK_VERSION}_linux_${TARGETARCH}.tar.gz"; \
+    tar zxf /tmp/traefik.tar.gz -C /usr/local/bin traefik; \
+    chmod +x /usr/local/bin/traefik; \
     ## init plugin dir
     mkdir -p /usr/local/bin/plugins-local/src/; \
     ## oidc-auth
@@ -27,3 +45,13 @@ RUN \
     tar zxf /tmp/real-ip.tar.gz --strip-components=1 -C /usr/local/bin/plugins-local/src/github.com/Paxxs/traefik-get-real-ip; \
     ## clean.
     rm -rf /tmp/*
+
+COPY --from=auth-build /out/auth /usr/local/bin/auth
+COPY --chmod=0755 rootfs /
+
+## traefik always runs; auth is a template enabled at runtime via ZSRV_auth=true
+RUN mkdir -p /.init/services/run && \
+    cp /build/services/traefik.conf /.init/services/run/
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/start.sh"]

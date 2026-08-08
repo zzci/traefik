@@ -15,6 +15,9 @@ cd traefik
 cp env.example .env
 # Edit .env with your settings
 
+# The compose file joins an existing external network; create it once:
+docker network create traefik
+
 ./aa run
 ```
 
@@ -25,6 +28,7 @@ traefik/
 ├── aa                    # Helper script
 ├── docker-compose.yml    # Docker Compose config
 ├── env.example           # Environment variables template
+├── auth.yml              # Local auth config template (copy to data/auth.yml)
 ├── example/
 │   ├── middleware.*.yml   # Middleware examples
 │   └── service.*.yml     # Service routing examples
@@ -44,9 +48,6 @@ traefik/
 | `ACME_EMAIL` | `admin@example.com` | ACME certificate email |
 | `ACME_DISABLE_CNAME` | `true` | Disable CNAME support for LEGO |
 | `ACME_DNS_API` | `https://auth.acme-dns.io` | ACME-DNS API endpoint |
-| `TRAEFIK_NETWORK` | `traefik` | Docker network name |
-| `TRAEFIK_SUBNET` | `172.18.0.0/16` | Docker network subnet |
-| `TRAEFIK_IPV4` | `172.18.0.2` | Traefik container IP |
 
 ### Static Config
 
@@ -84,6 +85,7 @@ http:
 |---|---|
 | `middleware.ipauth.yml` | IP allow list |
 | `middleware.pwdauth.yml` | Basic Auth |
+| `middleware.fwdauth.yml` | Local ForwardAuth login (see [Local Auth](#local-auth-forwardauth)) |
 | `middleware.oidc.yml` | OpenID Connect |
 | `middleware.cors.yml` | CORS headers |
 | `middleware.headers.yml` | Custom request/response headers |
@@ -102,3 +104,42 @@ http:
 | `service.dnstls.yml` | DNS challenge wildcard certificate (also works for dashboard) |
 | `service.notls.yml` | Plain HTTP (no TLS) |
 | `service.tcp.yml` | TCP passthrough |
+| `service.auth.yml` | Local auth service route |
+
+## Local Auth (ForwardAuth)
+
+A tiny login service (`auth/`) built into the traefik image and supervised
+alongside traefik, for protecting routes with a username/password form and
+domain-wide SSO — no external IdP, no extra container.
+
+Not started unless enabled. To enable, uncomment the auth block in
+`docker-compose.yml`:
+
+```yaml
+environment:
+  ZSRV_auth: "true"
+  AUTH_DOMAIN: example.com                       # cookie covers *.example.com
+  AUTH_COOKIE_NAME: _auth                        # optional
+  AUTH_USERS: "admin:$$2a$$12$$replace_me:admin" # user:secret[:group|group],...
+```
+
+`AUTH_USERS` secrets are bcrypt hashes (`$` escaped as `$$` in compose;
+generate with `docker exec -it traefik auth hash`) or plaintext passwords
+(convenient, but visible in `docker inspect`; must not contain `:` or `,`).
+Optional extras: `AUTH_HOST`, `AUTH_SESSION_TTL`, `AUTH_RATE_LIMIT` (e.g.
+`5/5m`). For more control, copy the `auth.yml` template to `data/auth.yml`
+as a base config; `AUTH_*` vars override individual fields from the file,
+so no config file is ever required.
+
+Then wire up the routes:
+
+```bash
+# Route the login page: copy example/service.auth.yml to services/
+#    and set your auth host (default auth.<domain>).
+# Protect a service: copy example/middleware.fwdauth.yml to services/
+#    and add "fwdauth" to that service's middlewares list.
+```
+
+Failed logins are rate-limited per IP and per username (default 5 per 5
+minutes). Sessions are stateless HMAC cookies scoped to the configured
+2nd-level domain; the cookie name is configurable via `cookie_name`.

@@ -1,0 +1,19 @@
+# Forward authentication via the built-in auth service (runs inside the
+# traefik container, enable with AUTH_ENABLED=true).
+# Add "fwdauth" (any signed-in user) or "fwdauth-admin" (group "admin")
+# to a router's middlewares list.
+http:
+  middlewares:
+    fwdauth:
+      forwardAuth:
+        address: http://127.0.0.1:9091/verify
+        authResponseHeaders:
+          - X-Auth-User
+          - X-Auth-Groups
+    fwdauth-admin:
+      forwardAuth:
+        # groups=a,b requires membership in any of the listed groups
+        address: http://127.0.0.1:9091/verify?groups=admin
+        authResponseHeaders:
+          - X-Auth-User
+          - X-Auth-Groups

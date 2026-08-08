@@ -25,6 +25,7 @@ traefik/
 ├── aa                    # 辅助脚本
 ├── docker-compose.yml    # Docker Compose 配置
 ├── env.example           # 环境变量模板
+├── auth.yml              # 本地认证配置模板（复制到 data/auth.yml）
 ├── example/
 │   ├── middleware.*.yml   # 中间件示例
 │   └── service.*.yml     # 服务路由示例
@@ -44,9 +45,6 @@ traefik/
 | `ACME_EMAIL` | `admin@example.com` | ACME 证书申请邮箱 |
 | `ACME_DISABLE_CNAME` | `true` | 禁用 LEGO 的 CNAME 支持 |
 | `ACME_DNS_API` | `https://auth.acme-dns.io` | ACME-DNS API 地址 |
-| `TRAEFIK_NETWORK` | `traefik` | Docker 网络名称 |
-| `TRAEFIK_SUBNET` | `172.18.0.0/16` | Docker 网络子网 |
-| `TRAEFIK_IPV4` | `172.18.0.2` | Traefik 容器 IP |
 
 ### 静态配置
 
