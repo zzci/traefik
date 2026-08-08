@@ -2,5 +2,5 @@ letsencrypt
 ssl
 log
 .env
-services
+/services
 tmp
