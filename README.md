@@ -85,7 +85,6 @@ http:
 |---|---|
 | `middleware.ipauth.yml` | IP allow list |
 | `middleware.pwdauth.yml` | Basic Auth |
-| `middleware.fwdauth.yml` | Local ForwardAuth login (see [Local Auth](#local-auth-forwardauth)) |
 | `middleware.oidc.yml` | OpenID Connect |
 | `middleware.cors.yml` | CORS headers |
 | `middleware.headers.yml` | Custom request/response headers |
@@ -104,7 +103,7 @@ http:
 | `service.dnstls.yml` | DNS challenge wildcard certificate (also works for dashboard) |
 | `service.notls.yml` | Plain HTTP (no TLS) |
 | `service.tcp.yml` | TCP passthrough |
-| `service.auth.yml` | Local auth service route |
+| `service.local-auth.yml` | Local auth instance: login route + fwdauth middlewares (see [Local Auth](#local-auth-forwardauth)) |
 
 ## Local Auth (ForwardAuth)
 
@@ -131,14 +130,13 @@ Optional extras: `AUTH_HOST`, `AUTH_SESSION_TTL`, `AUTH_RATE_LIMIT` (e.g.
 as a base config; `AUTH_*` vars override individual fields from the file,
 so no config file is ever required.
 
-Then wire up the routes:
+Then wire up the routes: copy `example/service.local-auth.yml` to
+`services/`, set your auth host (default `auth.<domain>`), and add
+`fwdauth` (any signed-in user) or `fwdauth-admin` (group `admin`) to the
+`middlewares` list of any router you want to protect.
 
-```bash
-# Route the login page: copy example/service.auth.yml to services/
-#    and set your auth host (default auth.<domain>).
-# Protect a service: copy example/middleware.fwdauth.yml to services/
-#    and add "fwdauth" to that service's middlewares list.
-```
+Config changes in `data/auth.yml` (e.g. passwords) hot-reload within a few
+seconds — no restart needed. Only `listen` / `data_dir` changes require one.
 
 Failed logins are rate-limited per IP and per username (default 5 per 5
 minutes). Sessions are stateless HMAC cookies scoped to the configured

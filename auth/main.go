@@ -49,6 +49,7 @@ func cmdServe(args []string) {
 		log.Fatal(err)
 	}
 	s := newServer(cfg, secret)
+	s.watchConfig(*configPath)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           s.handler(),

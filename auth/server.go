@@ -3,12 +3,18 @@ package main
 import (
 	"crypto/subtle"
 	"embed"
+	"fmt"
 	"html/template"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -29,25 +35,95 @@ func mustDummyHash() []byte {
 	return h
 }
 
-const bcryptCost = 12
+const (
+	bcryptCost     = 12
+	reloadInterval = 5 * time.Second
+)
 
 type server struct {
-	cfg    *Config
+	cfg    atomic.Pointer[Config]
 	secret []byte
 	rl     *rateLimiter
 	tmpl   *template.Template
 	now    func() time.Time
+
+	// config hot-reload state
+	configPath string
+	reloadMu   sync.Mutex
+	fileStamp  string
 }
 
 func newServer(cfg *Config, secret []byte) *server {
-	return &server{
-		cfg:    cfg,
+	s := &server{
 		secret: secret,
-		rl:     newRateLimiter(cfg.LoginRateLimit.Attempts, time.Duration(cfg.LoginRateLimit.Window)),
+		rl:     newRateLimiter(),
 		tmpl:   template.Must(template.ParseFS(webFS, "web/*.html")),
 		now:    time.Now,
 	}
+	s.cfg.Store(cfg)
+	return s
 }
+
+func (s *server) conf() *Config { return s.cfg.Load() }
+
+// --- config hot reload -----------------------------------------------------
+
+// watchConfig reloads the config when the file at path changes (polled every
+// reloadInterval, or immediately on SIGHUP). User/password edits take effect
+// without restart; listen and data_dir changes still require one.
+func (s *server) watchConfig(path string) {
+	s.configPath = path
+	s.fileStamp = fileStamp(path)
+	go func() {
+		hup := make(chan os.Signal, 1)
+		signal.Notify(hup, syscall.SIGHUP)
+		tick := time.NewTicker(reloadInterval)
+		for {
+			select {
+			case <-tick.C:
+			case <-hup:
+				s.reloadMu.Lock()
+				s.fileStamp = "\x00force"
+				s.reloadMu.Unlock()
+			}
+			s.reloadIfChanged()
+		}
+	}()
+}
+
+func fileStamp(path string) string {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d-%d", fi.ModTime().UnixNano(), fi.Size())
+}
+
+func (s *server) reloadIfChanged() {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	stamp := fileStamp(s.configPath)
+	if stamp == s.fileStamp {
+		return
+	}
+	// remember the stamp either way so a broken file is logged once, not
+	// every poll tick
+	s.fileStamp = stamp
+	cfg, err := loadConfig(s.configPath)
+	if err != nil {
+		log.Printf("config reload failed, keeping previous config: %v", err)
+		return
+	}
+	old := s.conf()
+	if cfg.Listen != old.Listen || cfg.DataDir != old.DataDir {
+		log.Printf("config reload: listen/data_dir changes require a restart, ignoring")
+		cfg.Listen, cfg.DataDir = old.Listen, old.DataDir
+	}
+	s.cfg.Store(cfg)
+	log.Printf("config reloaded (%d users)", len(cfg.Users))
+}
+
+// --- routes ----------------------------------------------------------------
 
 func (s *server) handler() http.Handler {
 	mux := http.NewServeMux()
@@ -89,7 +165,7 @@ func (s *server) unauthorized(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	login := url.URL{Scheme: "https", Host: s.cfg.AuthHost, Path: "/login"}
+	login := url.URL{Scheme: "https", Host: s.conf().AuthHost, Path: "/login"}
 	if rd := forwardedURL(r); rd != "" {
 		login.RawQuery = url.Values{"rd": {rd}}.Encode()
 	}
@@ -174,28 +250,31 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	c := s.conf()
 	username := r.PostFormValue("username")
 	password := r.PostFormValue("password")
 	rd := r.PostFormValue("rd")
 	ip := clientIP(r)
 
+	attempts := c.LoginRateLimit.Attempts
+	window := time.Duration(c.LoginRateLimit.Window)
 	ipKey, userKey := "ip:"+ip, "user:"+username
-	if !s.rl.allow(ipKey) || !s.rl.allow(userKey) {
+	if !s.rl.allow(ipKey, attempts, window) || !s.rl.allow(userKey, attempts, window) {
 		log.Printf("login rate-limited user=%q ip=%s", username, ip)
 		s.renderMessage(w, http.StatusTooManyRequests, "Too many attempts",
 			"Too many failed login attempts. Please try again later.", "", "")
 		return
 	}
 
-	user := s.cfg.findUser(username)
+	user := c.findUser(username)
 	hash := dummyHash
 	if user != nil {
 		hash = []byte(user.PasswordHash)
 	}
 	compareErr := bcrypt.CompareHashAndPassword(hash, []byte(password))
 	if user == nil || compareErr != nil {
-		s.rl.fail(ipKey)
-		s.rl.fail(userKey)
+		s.rl.fail(ipKey, window)
+		s.rl.fail(userKey, window)
 		log.Printf("login failed user=%q ip=%s", username, ip)
 		s.renderLogin(w, http.StatusUnauthorized, loginPage{
 			CSRF: csrfCookie.Value, RD: rd, Error: "Invalid username or password.",
@@ -209,14 +288,14 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		User:   user.Username,
 		Groups: user.Groups,
 		Iat:    now.Unix(),
-		Exp:    now.Add(time.Duration(s.cfg.SessionTTL)).Unix(),
+		Exp:    now.Add(time.Duration(c.SessionTTL)).Unix(),
 	})
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.cfg.CookieName,
+		Name:     c.CookieName,
 		Value:    token,
-		Domain:   s.cfg.Domain,
+		Domain:   c.Domain,
 		Path:     "/",
-		MaxAge:   int(time.Duration(s.cfg.SessionTTL).Seconds()),
+		MaxAge:   int(time.Duration(c.SessionTTL).Seconds()),
 		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
@@ -230,10 +309,11 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	c := s.conf()
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.cfg.CookieName,
+		Name:     c.CookieName,
 		Value:    "",
-		Domain:   s.cfg.Domain,
+		Domain:   c.Domain,
 		Path:     "/",
 		MaxAge:   -1,
 		Secure:   true,
@@ -246,11 +326,11 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 // --- helpers ---------------------------------------------------------------
 
 func (s *server) csrfCookieName() string {
-	return s.cfg.CookieName + "_csrf"
+	return s.conf().CookieName + "_csrf"
 }
 
 func (s *server) sessionFrom(r *http.Request) (session, bool) {
-	c, err := r.Cookie(s.cfg.CookieName)
+	c, err := r.Cookie(s.conf().CookieName)
 	if err != nil {
 		return session{}, false
 	}
@@ -272,7 +352,8 @@ func (s *server) safeRD(rd string) string {
 		return ""
 	}
 	host := u.Hostname()
-	if host == s.cfg.Domain || strings.HasSuffix(host, "."+s.cfg.Domain) {
+	domain := s.conf().Domain
+	if host == domain || strings.HasSuffix(host, "."+domain) {
 		return u.String()
 	}
 	return ""

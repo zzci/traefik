@@ -1,0 +1,35 @@
+# Local auth (built-in ForwardAuth login service) — all-in-one instance config.
+# Requires the auth service enabled in the traefik container (ZSRV_auth=true).
+#
+# 1. Set your auth host below (must match AUTH_HOST / auth_host, default
+#    auth.<domain>) and copy this file to services/.
+# 2. Protect any router by adding "fwdauth" (any signed-in user) or
+#    "fwdauth-admin" (group "admin") to its middlewares list.
+http:
+  routers:
+    local-auth:
+      entryPoints:
+        - https
+      rule: Host(`auth.example.com`)
+      service: local-auth
+      tls:
+        certResolver: default
+  services:
+    local-auth:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:9091
+  middlewares:
+    fwdauth:
+      forwardAuth:
+        address: http://127.0.0.1:9091/verify
+        authResponseHeaders:
+          - X-Auth-User
+          - X-Auth-Groups
+    fwdauth-admin:
+      forwardAuth:
+        # groups=a,b requires membership in any of the listed groups
+        address: http://127.0.0.1:9091/verify?groups=admin
+        authResponseHeaders:
+          - X-Auth-User
+          - X-Auth-Groups

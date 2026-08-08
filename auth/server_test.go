@@ -58,7 +58,7 @@ func loginAs(t *testing.T, s *server, username, password, rd, ip string) (*http.
 	req.AddCookie(csrf)
 	rec = do(s, req)
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == s.cfg.CookieName && c.MaxAge > 0 {
+		if c.Name == s.conf().CookieName && c.MaxAge > 0 {
 			return c, rec
 		}
 	}
@@ -211,7 +211,7 @@ func TestLoginSuccessResetsUserBucket(t *testing.T) {
 	if cookie, rec := loginAs(t, s, "alice", "secret", "", "3.3.3.3"); cookie == nil {
 		t.Fatalf("login should succeed, got %d", rec.Code)
 	}
-	if !s.rl.allow("user:alice") {
+	if !s.rl.allow("user:alice", 3, time.Minute) {
 		t.Fatal("user bucket should be reset after success")
 	}
 }
