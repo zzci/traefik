@@ -126,7 +126,10 @@ environment:
 generate with `docker exec -it traefik auth hash`) or plaintext passwords
 (convenient, but visible in `docker inspect`; must not contain `:` or `,`).
 Optional extras: `AUTH_HOST`, `AUTH_SESSION_TTL`, `AUTH_RATE_LIMIT` (e.g.
-`5/5m`). For more control, copy the `auth.yml` template to `data/auth.yml`
+`5/5m`), `AUTH_CONFIG` (config file path, default `/data/auth.yml`),
+`AUTH_LOG_LEVEL` (`debug|info|warn|error`, default `info`; failed logins and
+CSRF rejections log at `warn`, per-request auth decisions at `debug`).
+For more control, copy the `auth.yml` template to `data/auth.yml`
 as a base config; `AUTH_*` vars override individual fields from the file,
 so no config file is ever required.
 

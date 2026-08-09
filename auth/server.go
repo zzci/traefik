@@ -5,7 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -111,16 +111,17 @@ func (s *server) reloadIfChanged() {
 	s.fileStamp = stamp
 	cfg, err := loadConfig(s.configPath)
 	if err != nil {
-		log.Printf("config reload failed, keeping previous config: %v", err)
+		slog.Error("config reload failed, keeping previous config", "error", err)
 		return
 	}
 	old := s.conf()
 	if cfg.Listen != old.Listen || cfg.DataDir != old.DataDir {
-		log.Printf("config reload: listen/data_dir changes require a restart, ignoring")
+		slog.Warn("config reload: listen/data_dir changes require a restart, ignoring")
 		cfg.Listen, cfg.DataDir = old.Listen, old.DataDir
 	}
 	s.cfg.Store(cfg)
-	log.Printf("config reloaded (%d users)", len(cfg.Users))
+	applyLogLevel(cfg.LogLevel)
+	slog.Info("config reloaded", "users", len(cfg.Users))
 }
 
 // --- routes ----------------------------------------------------------------
@@ -145,11 +146,15 @@ func (s *server) handler() http.Handler {
 func (s *server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	sess, ok := s.sessionFrom(r)
 	if !ok {
+		slog.Debug("verify: no valid session, redirecting to login",
+			"url", forwardedURL(r), "ip", clientIP(r))
 		s.unauthorized(w, r)
 		return
 	}
 	if required := r.URL.Query().Get("groups"); required != "" {
 		if !hasAnyGroup(sess.Groups, strings.Split(required, ",")) {
+			slog.Warn("verify: group denied", "user", sess.User,
+				"required", required, "url", forwardedURL(r))
 			s.renderMessage(w, http.StatusForbidden, "Access denied",
 				"Your account ("+sess.User+") does not have access to this service.", "/logout", "Sign out")
 			return
@@ -224,16 +229,49 @@ func (s *server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 			"Signed in as "+sess.User+".", "/logout", "Sign out")
 		return
 	}
-	csrf := randomToken()
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.csrfCookieName(),
-		Value:    csrf,
-		Path:     "/login",
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	// Reuse an existing csrf cookie so concurrent login tabs don't
+	// invalidate each other's forms.
+	csrf := ""
+	if c, err := r.Cookie(s.csrfCookieName()); err == nil && validCSRFToken(c.Value) {
+		csrf = c.Value
+	}
+	if csrf == "" {
+		csrf = randomToken()
+		http.SetCookie(w, &http.Cookie{
+			Name:     s.csrfCookieName(),
+			Value:    csrf,
+			Domain:   s.conf().Domain,
+			Path:     "/login",
+			Secure:   isSecureRequest(r),
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+	}
 	s.renderLogin(w, http.StatusOK, loginPage{CSRF: csrf, RD: rd})
+}
+
+// validCSRFToken reports whether v looks like a token we issued
+// (base64url charset, sane length) — guards cookie reuse against junk.
+func validCSRFToken(v string) bool {
+	if len(v) < 16 || len(v) > 64 {
+		return false
+	}
+	for _, c := range v {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-', c == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// isSecureRequest reports whether the client reached us over HTTPS (directly
+// or via traefik). Cookies are only marked Secure then, so plain-HTTP setups
+// (e.g. TLS not configured yet) still get a working login instead of the
+// browser silently dropping the cookies.
+func isSecureRequest(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
@@ -245,6 +283,13 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	formCSRF := r.PostFormValue("csrf")
 	if err != nil || formCSRF == "" ||
 		subtle.ConstantTimeCompare([]byte(csrfCookie.Value), []byte(formCSRF)) != 1 {
+		reason := "token mismatch"
+		if err != nil {
+			reason = "csrf cookie missing (cookies blocked, or http page with a Secure cookie)"
+		} else if formCSRF == "" {
+			reason = "form token missing"
+		}
+		slog.Warn("login rejected: csrf validation failed", "reason", reason, "ip", clientIP(r))
 		s.renderMessage(w, http.StatusForbidden, "Invalid request",
 			"The login request could not be validated. Please try again.", "/login", "Back to sign in")
 		return
@@ -260,7 +305,7 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	window := time.Duration(c.LoginRateLimit.Window)
 	ipKey, userKey := "ip:"+ip, "user:"+username
 	if !s.rl.allow(ipKey, attempts, window) || !s.rl.allow(userKey, attempts, window) {
-		log.Printf("login rate-limited user=%q ip=%s", username, ip)
+		slog.Warn("login rate-limited", "user", username, "ip", ip)
 		s.renderMessage(w, http.StatusTooManyRequests, "Too many attempts",
 			"Too many failed login attempts. Please try again later.", "", "")
 		return
@@ -275,7 +320,7 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	if user == nil || compareErr != nil {
 		s.rl.fail(ipKey, window)
 		s.rl.fail(userKey, window)
-		log.Printf("login failed user=%q ip=%s", username, ip)
+		slog.Warn("login failed", "user", username, "ip", ip)
 		s.renderLogin(w, http.StatusUnauthorized, loginPage{
 			CSRF: csrfCookie.Value, RD: rd, Error: "Invalid username or password.",
 		})
@@ -296,13 +341,16 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		Domain:   c.Domain,
 		Path:     "/",
 		MaxAge:   int(time.Duration(c.SessionTTL).Seconds()),
-		Secure:   true,
+		Secure:   isSecureRequest(r),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	log.Printf("login ok user=%q ip=%s", username, ip)
+	slog.Info("login ok", "user", username, "ip", ip)
 	target := s.safeRD(rd)
 	if target == "" {
+		if rd != "" {
+			slog.Warn("login: redirect target rejected by open-redirect guard", "rd", rd)
+		}
 		target = "/login"
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
@@ -316,7 +364,7 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Domain:   c.Domain,
 		Path:     "/",
 		MaxAge:   -1,
-		Secure:   true,
+		Secure:   isSecureRequest(r),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -336,6 +384,7 @@ func (s *server) sessionFrom(r *http.Request) (session, bool) {
 	}
 	sess, err := verifySession(s.secret, c.Value, s.now())
 	if err != nil {
+		slog.Debug("session cookie invalid", "error", err)
 		return session{}, false
 	}
 	return sess, true
@@ -380,7 +429,7 @@ func (s *server) renderLogin(w http.ResponseWriter, status int, page loginPage) 
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	if err := s.tmpl.ExecuteTemplate(w, "login.html", page); err != nil {
-		log.Printf("render login: %v", err)
+		slog.Error("render login", "error", err)
 	}
 }
 
@@ -392,6 +441,6 @@ func (s *server) renderMessage(w http.ResponseWriter, status int, title, text, l
 		"Title": title, "Text": text, "LinkHref": linkHref, "LinkText": linkText,
 	})
 	if err != nil {
-		log.Printf("render message: %v", err)
+		slog.Error("render message", "error", err)
 	}
 }

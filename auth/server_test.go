@@ -36,7 +36,9 @@ func do(s *server, req *http.Request) *httptest.ResponseRecorder {
 // loginAs runs the full GET+POST login flow and returns the session cookie.
 func loginAs(t *testing.T, s *server, username, password, rd, ip string) (*http.Cookie, *httptest.ResponseRecorder) {
 	t.Helper()
-	rec := do(s, httptest.NewRequest("GET", "/login", nil))
+	getReq := httptest.NewRequest("GET", "/login", nil)
+	getReq.Header.Set("X-Forwarded-Proto", "https")
+	rec := do(s, getReq)
 	var csrf *http.Cookie
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == s.csrfCookieName() {
@@ -52,6 +54,7 @@ func loginAs(t *testing.T, s *server, username, password, rd, ip string) (*http.
 	}
 	req := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Forwarded-Proto", "https")
 	if ip != "" {
 		req.Header.Set("X-Forwarded-For", ip)
 	}
@@ -307,5 +310,84 @@ func TestLoginFormRedirectsWhenAlreadySignedIn(t *testing.T) {
 	rec := do(s, req)
 	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "https://app.example.com/x" {
 		t.Fatalf("got %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestCSRFCookieReusedAcrossTabs(t *testing.T) {
+	s := newTestServer(t)
+	// tab 1 opens the login page
+	rec1 := do(s, httptest.NewRequest("GET", "/login", nil))
+	var csrf *http.Cookie
+	for _, c := range rec1.Result().Cookies() {
+		if c.Name == s.csrfCookieName() {
+			csrf = c
+		}
+	}
+	if csrf == nil {
+		t.Fatal("no csrf cookie on first load")
+	}
+	// tab 2 opens the login page with tab 1's cookie: token must be reused
+	req2 := httptest.NewRequest("GET", "/login", nil)
+	req2.AddCookie(csrf)
+	rec2 := do(s, req2)
+	for _, c := range rec2.Result().Cookies() {
+		if c.Name == s.csrfCookieName() && c.Value != csrf.Value {
+			t.Fatal("second tab must not rotate the csrf cookie")
+		}
+	}
+	if !strings.Contains(rec2.Body.String(), csrf.Value) {
+		t.Fatal("second tab's form must carry the same token")
+	}
+	// tab 1's form still submits fine
+	form := url.Values{"csrf": {csrf.Value}, "username": {"alice"}, "password": {"secret"}}
+	post := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	post.AddCookie(csrf)
+	if rec := do(s, post); rec.Code != http.StatusSeeOther {
+		t.Fatalf("tab 1 submit: got %d", rec.Code)
+	}
+}
+
+func TestPlainHTTPCookiesNotSecure(t *testing.T) {
+	s := newTestServer(t)
+	// no TLS, no X-Forwarded-Proto: cookies must not be Secure or the
+	// browser drops them and login can never succeed
+	rec := do(s, httptest.NewRequest("GET", "/login", nil))
+	var csrf *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == s.csrfCookieName() {
+			csrf = c
+		}
+	}
+	if csrf == nil || csrf.Secure {
+		t.Fatalf("csrf cookie over plain http must not be Secure: %+v", csrf)
+	}
+	form := url.Values{"csrf": {csrf.Value}, "username": {"alice"}, "password": {"secret"}}
+	post := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	post.AddCookie(csrf)
+	rec = do(s, post)
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == s.conf().CookieName && c.Secure {
+			t.Fatal("session cookie over plain http must not be Secure")
+		}
+	}
+	// via traefik with https the cookies stay Secure (loginAs sets XFP)
+	if cookie, _ := loginAs(t, s, "alice", "secret", "", ""); cookie == nil || !cookie.Secure {
+		t.Fatal("session cookie over https must be Secure")
+	}
+}
+
+func TestAllCookiesUseConfiguredDomain(t *testing.T) {
+	s := newTestServer(t)
+	rec := do(s, httptest.NewRequest("GET", "/login", nil))
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == s.csrfCookieName() && c.Domain != "example.com" {
+			t.Fatalf("csrf cookie domain: got %q, want configured domain", c.Domain)
+		}
+	}
+	cookie, _ := loginAs(t, s, "alice", "secret", "", "")
+	if cookie == nil || cookie.Domain != "example.com" {
+		t.Fatalf("session cookie domain: %+v", cookie)
 	}
 }

@@ -18,6 +18,7 @@ domain: example.com
 # Optional. Defaults shown (listen/data_dir defaults suit the bundled setup).
 # listen: "127.0.0.1:9091"
 # data_dir: /data/auth     # HMAC secret persisted here (auto-generated)
+# log_level: info          # debug | info | warn | error (hot-reloadable)
 # session_ttl: 24h
 
 # Brute-force protection: failed logins per IP and per username.

@@ -34,6 +34,9 @@ func applyEnv(cfg *Config) error {
 	if v := os.Getenv("AUTH_HOST"); v != "" {
 		cfg.AuthHost = v
 	}
+	if v := os.Getenv("AUTH_LOG_LEVEL"); v != "" {
+		cfg.LogLevel = v
+	}
 	if v := os.Getenv("AUTH_SESSION_TTL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {

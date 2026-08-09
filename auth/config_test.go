@@ -129,3 +129,24 @@ users:
 		})
 	}
 }
+
+func TestConfigRejectsAuthHostOutsideDomain(t *testing.T) {
+	_, err := loadConfig(writeConfig(t, `
+domain: example.com
+auth_host: login.other.com
+users:
+  - {username: a, password_hash: "`+testHash+`"}
+`))
+	if err == nil || !strings.Contains(err.Error(), "auth_host") {
+		t.Fatalf("want auth_host validation error, got %v", err)
+	}
+	// same-domain and subdomain hosts are fine
+	if _, err := loadConfig(writeConfig(t, `
+domain: example.com
+auth_host: example.com
+users:
+  - {username: a, password_hash: "`+testHash+`"}
+`)); err != nil {
+		t.Fatalf("apex auth_host should be valid: %v", err)
+	}
+}

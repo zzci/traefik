@@ -44,6 +44,7 @@ type Config struct {
 	AuthHost       string          `yaml:"auth_host"`
 	Listen         string          `yaml:"listen"`
 	DataDir        string          `yaml:"data_dir"`
+	LogLevel       string          `yaml:"log_level"`
 	SessionTTL     duration        `yaml:"session_ttl"`
 	LoginRateLimit RateLimitConfig `yaml:"login_rate_limit"`
 	Users          []User          `yaml:"users"`
@@ -107,11 +108,20 @@ func (c *Config) applyDefaultsAndValidate() error {
 	if c.AuthHost == "" {
 		c.AuthHost = "auth." + c.Domain
 	}
+	if c.AuthHost != c.Domain && !strings.HasSuffix(c.AuthHost, "."+c.Domain) {
+		return fmt.Errorf("auth_host %q must be %q or one of its subdomains (browsers reject the session cookie otherwise)", c.AuthHost, c.Domain)
+	}
 	if c.Listen == "" {
 		c.Listen = "127.0.0.1:9091"
 	}
 	if c.DataDir == "" {
 		c.DataDir = "/data/auth"
+	}
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
+	if _, err := parseLogLevel(c.LogLevel); err != nil {
+		return err
 	}
 	if c.SessionTTL <= 0 {
 		c.SessionTTL = duration(24 * time.Hour)
