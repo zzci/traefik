@@ -7,9 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -78,40 +75,17 @@ func verifySession(secret []byte, token string, now time.Time) (session, error) 
 }
 
 // resolveSecret returns the session-signing secret: the configured string
-// (config file `secret` / env AUTH_SECRET) when set — no filesystem access —
-// otherwise the auto-generated one persisted under data_dir.
-func resolveSecret(cfg *Config) ([]byte, error) {
+// (config file `secret` / env AUTH_SECRET) when set, otherwise a random
+// ephemeral one — sessions then reset on restart (reported via ephemeral).
+func resolveSecret(cfg *Config) (secret []byte, ephemeral bool) {
 	if cfg.Secret != "" {
-		return []byte(cfg.Secret), nil
-	}
-	return loadSecret(cfg.DataDir)
-}
-
-// loadSecret returns the HMAC secret from <dataDir>/secret, generating and
-// persisting a random one on first boot.
-func loadSecret(dataDir string) ([]byte, error) {
-	path := filepath.Join(dataDir, "secret")
-	if b, err := os.ReadFile(path); err == nil {
-		secret := []byte(strings.TrimSpace(string(b)))
-		if len(secret) < 32 {
-			return nil, fmt.Errorf("%s: secret too short (need >= 32 bytes)", path)
-		}
-		return secret, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
+		return []byte(cfg.Secret), false
 	}
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		return nil, err
+		panic(err)
 	}
-	secret := []byte(base64.RawStdEncoding.EncodeToString(raw))
-	if err := os.MkdirAll(dataDir, 0o700); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(path, secret, 0o600); err != nil {
-		return nil, err
-	}
-	return secret, nil
+	return raw, true
 }
 
 func randomToken() string {

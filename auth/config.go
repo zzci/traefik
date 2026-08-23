@@ -43,7 +43,6 @@ type Config struct {
 	CookieName     string          `yaml:"cookie_name"`
 	AuthHost       string          `yaml:"auth_host"`
 	Listen         string          `yaml:"listen"`
-	DataDir        string          `yaml:"data_dir"`
 	Secret         string          `yaml:"secret"`
 	LogLevel       string          `yaml:"log_level"`
 	SessionTTL     duration        `yaml:"session_ttl"`
@@ -114,9 +113,6 @@ func (c *Config) applyDefaultsAndValidate() error {
 	}
 	if c.Listen == "" {
 		c.Listen = "127.0.0.1:9091"
-	}
-	if c.DataDir == "" {
-		c.DataDir = "/data/auth"
 	}
 	if c.Secret != "" && len(c.Secret) < 32 {
 		return fmt.Errorf("secret must be at least 32 characters (generate with: openssl rand -hex 32)")

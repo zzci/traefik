@@ -77,45 +77,17 @@ func TestSessionMalformed(t *testing.T) {
 	}
 }
 
-func TestLoadSecretGeneratesAndPersists(t *testing.T) {
-	dir := t.TempDir()
-	s1, err := loadSecret(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(s1) < 32 {
-		t.Fatalf("secret too short: %d bytes", len(s1))
-	}
-	s2, err := loadSecret(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(s1) != string(s2) {
-		t.Fatal("secret not stable across loads")
-	}
-}
-
-func TestLoadSecretRejectsShort(t *testing.T) {
-	dir := t.TempDir()
-	if err := writeFile(dir+"/secret", "short"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := loadSecret(dir); err == nil {
-		t.Fatal("want error for short secret")
-	}
-}
-
 func TestResolveSecret(t *testing.T) {
-	// configured secret wins, no filesystem touched
-	cfg := &Config{Secret: "0123456789abcdef0123456789abcdef", DataDir: "/nonexistent/dir"}
-	s, err := resolveSecret(cfg)
-	if err != nil || string(s) != cfg.Secret {
-		t.Fatalf("configured secret: %q err %v", s, err)
+	// configured secret wins and is stable
+	cfg := &Config{Secret: "0123456789abcdef0123456789abcdef"}
+	s, ephemeral := resolveSecret(cfg)
+	if ephemeral || string(s) != cfg.Secret {
+		t.Fatalf("configured secret: %q ephemeral=%v", s, ephemeral)
 	}
-	// no secret configured: falls back to generated+persisted file
-	dir := t.TempDir()
-	s2, err := resolveSecret(&Config{DataDir: dir})
-	if err != nil || len(s2) < 32 {
-		t.Fatalf("generated secret: len=%d err %v", len(s2), err)
+	// no secret configured: random ephemeral, differs per call
+	e1, eph1 := resolveSecret(&Config{})
+	e2, eph2 := resolveSecret(&Config{})
+	if !eph1 || !eph2 || len(e1) != 32 || string(e1) == string(e2) {
+		t.Fatalf("ephemeral secrets: len=%d equal=%v", len(e1), string(e1) == string(e2))
 	}
 }

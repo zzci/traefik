@@ -15,14 +15,13 @@ domain: example.com
 # Unauthenticated browsers are redirected to https://<auth_host>/login.
 # auth_host: auth.example.com
 
-# Optional. Session-signing secret string (>= 32 chars, generate with:
-# openssl rand -hex 32). When set, nothing is written to disk; when unset,
-# a random secret is generated and persisted under data_dir.
+# Recommended. Session-signing secret string (>= 32 chars, generate with:
+# openssl rand -hex 32). When unset, a random ephemeral secret is used and
+# all sessions reset on every restart.
 # secret: "change_me_to_a_random_32+_char_string"
 
-# Optional. Defaults shown (listen/data_dir defaults suit the bundled setup).
+# Optional. Defaults shown.
 # listen: "127.0.0.1:9091"
-# data_dir: /data/auth     # auto-generated secret persisted here (if no secret set)
 # log_level: info          # debug | info | warn | error (hot-reloadable)
 # session_ttl: 24h
 

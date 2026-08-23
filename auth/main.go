@@ -63,9 +63,9 @@ func cmdServe(args []string) {
 		log.Fatal(err)
 	}
 	applyLogLevel(cfg.LogLevel)
-	secret, err := resolveSecret(cfg)
-	if err != nil {
-		log.Fatal(err)
+	secret, ephemeral := resolveSecret(cfg)
+	if ephemeral {
+		slog.Warn("no secret configured: using an ephemeral one, sessions will reset on restart (set AUTH_SECRET or `secret` in the config)")
 	}
 	s := newServer(cfg, secret)
 	s.watchConfig(path)
