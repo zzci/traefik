@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/auth .
 FROM zzci/ubase
 
 # Any traefik release works, including older v2.x (same asset naming).
-ARG TRAEFIK_VERSION=v3.7.5
+ARG TRAEFIK_VERSION=v3.7.11
 ARG TARGETARCH
 
 WORKDIR /usr/local/bin/

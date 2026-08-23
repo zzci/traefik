@@ -150,3 +150,22 @@ users:
 		t.Fatalf("apex auth_host should be valid: %v", err)
 	}
 }
+
+func TestConfigSecret(t *testing.T) {
+	if _, err := loadConfig(writeConfig(t, minimalConfig+"secret: tooshort\n")); err == nil ||
+		!strings.Contains(err.Error(), "secret") {
+		t.Fatal("short secret must error")
+	}
+	long := strings.Repeat("s", 32)
+	cfg, err := loadConfig(writeConfig(t, minimalConfig+"secret: "+long+"\n"))
+	if err != nil || cfg.Secret != long {
+		t.Fatalf("secret: %q err %v", cfg.Secret, err)
+	}
+	// env overrides file
+	envSecret := strings.Repeat("e", 32)
+	t.Setenv("AUTH_SECRET", envSecret)
+	cfg, err = loadConfig(writeConfig(t, minimalConfig))
+	if err != nil || cfg.Secret != envSecret {
+		t.Fatalf("env secret: %q err %v", cfg.Secret, err)
+	}
+}

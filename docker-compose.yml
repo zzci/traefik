@@ -27,6 +27,7 @@ services:
       # AUTH_DOMAIN: example.com
       # AUTH_COOKIE_NAME: _auth
       # AUTH_USERS: "admin:$$2a$$12$$replace_me:admin"
+      # AUTH_SECRET: "random_32+_chars"   # optional; unset = auto-generated in /data/auth
 
 networks:
   traefik:

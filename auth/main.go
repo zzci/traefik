@@ -63,7 +63,7 @@ func cmdServe(args []string) {
 		log.Fatal(err)
 	}
 	applyLogLevel(cfg.LogLevel)
-	secret, err := loadSecret(cfg.DataDir)
+	secret, err := resolveSecret(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}

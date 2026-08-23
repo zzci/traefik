@@ -77,6 +77,16 @@ func verifySession(secret []byte, token string, now time.Time) (session, error) 
 	return s, nil
 }
 
+// resolveSecret returns the session-signing secret: the configured string
+// (config file `secret` / env AUTH_SECRET) when set — no filesystem access —
+// otherwise the auto-generated one persisted under data_dir.
+func resolveSecret(cfg *Config) ([]byte, error) {
+	if cfg.Secret != "" {
+		return []byte(cfg.Secret), nil
+	}
+	return loadSecret(cfg.DataDir)
+}
+
 // loadSecret returns the HMAC secret from <dataDir>/secret, generating and
 // persisting a random one on first boot.
 func loadSecret(dataDir string) ([]byte, error) {

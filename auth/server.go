@@ -115,9 +115,9 @@ func (s *server) reloadIfChanged() {
 		return
 	}
 	old := s.conf()
-	if cfg.Listen != old.Listen || cfg.DataDir != old.DataDir {
-		slog.Warn("config reload: listen/data_dir changes require a restart, ignoring")
-		cfg.Listen, cfg.DataDir = old.Listen, old.DataDir
+	if cfg.Listen != old.Listen || cfg.DataDir != old.DataDir || cfg.Secret != old.Secret {
+		slog.Warn("config reload: listen/data_dir/secret changes require a restart, ignoring")
+		cfg.Listen, cfg.DataDir, cfg.Secret = old.Listen, old.DataDir, old.Secret
 	}
 	s.cfg.Store(cfg)
 	applyLogLevel(cfg.LogLevel)
