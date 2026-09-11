@@ -46,7 +46,7 @@ RUN \
     ## clean.
     rm -rf /tmp/*
 
-COPY --from=auth-build /out/auth /usr/local/bin/auth
+COPY --from=auth-build /out/auth /usr/local/bin/traefik-auth
 COPY --chmod=0755 rootfs /
 
 ## traefik always runs; auth is a template enabled at runtime via ZSRV_auth=true

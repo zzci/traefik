@@ -20,7 +20,7 @@ services:
       HTTPREQ_PASSWORD: xxx
       ## Built-in ForwardAuth login service (see auth/), disabled by default.
       ## Uncomment to enable; secret is a bcrypt hash ($ escaped as $$,
-      ## generate with: docker exec -it traefik auth hash) or a plaintext
+      ## generate with: docker exec -it traefik traefik-auth hash) or a plaintext
       ## password (no ":" or ","). Optional base config: ./data/auth.yml;
       ## AUTH_* vars override fields from the file.
       # ZSRV_auth: "true"

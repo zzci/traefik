@@ -123,7 +123,7 @@ environment:
 ```
 
 `AUTH_USERS` secrets are bcrypt hashes (`$` escaped as `$$` in compose;
-generate with `docker exec -it traefik auth hash`) or plaintext passwords
+generate with `docker exec -it traefik traefik-auth hash`) or plaintext passwords
 (convenient, but visible in `docker inspect`; must not contain `:` or `,`).
 Optional extras: `AUTH_HOST`, `AUTH_SESSION_TTL`, `AUTH_RATE_LIMIT` (e.g.
 `5/5m`), `AUTH_SECRET` (session-signing secret string, ≥32 chars —
@@ -141,7 +141,7 @@ Then wire up the routes: copy `example/service.local-auth.yml` to
 `middlewares` list of any router you want to protect.
 
 Config changes in `data/auth.yml` (e.g. passwords) hot-reload within a few
-seconds — no restart needed. Only `listen` / `data_dir` changes require one.
+seconds — no restart needed. Only `listen` / `secret` changes require one.
 
 Failed logins are rate-limited per IP and per username (default 5 per 5
 minutes). Sessions are stateless HMAC cookies scoped to the configured

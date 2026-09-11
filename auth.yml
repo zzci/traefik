@@ -31,7 +31,7 @@ domain: example.com
 #   window: 5m
 
 users:
-  # Generate the hash with: docker exec -it traefik auth hash
+  # Generate the hash with: docker exec -it traefik traefik-auth hash
   - username: admin
     password_hash: "$2a$12$REPLACE_ME"
     groups: [admin]

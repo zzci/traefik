@@ -34,9 +34,9 @@ const defaultConfigPath = "/data/auth.yml"
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  auth serve [-c config.yml]   start the ForwardAuth server
-                               (config path: -c > $AUTH_CONFIG > `+defaultConfigPath+`)
-  auth hash                    bcrypt a password read from stdin`)
+  traefik-auth serve [-c config.yml]   start the ForwardAuth server
+                                       (config path: -c > $AUTH_CONFIG > `+defaultConfigPath+`)
+  traefik-auth hash                    bcrypt a password read from stdin`)
 }
 
 // resolveConfigPath picks the config file path: explicit -c flag first,
