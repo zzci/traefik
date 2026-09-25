@@ -26,6 +26,10 @@ http:
         authResponseHeaders:
           - X-Auth-User
           - X-Auth-Groups
+        # optional (traefik v3.1+, must match cookie_name): also renew sessions
+        # on API/fetch requests, not just page loads
+        addAuthCookiesToResponse:
+          - _auth
     fwdauth-admin:
       forwardAuth:
         # groups=a,b requires membership in any of the listed groups
@@ -33,3 +37,7 @@ http:
         authResponseHeaders:
           - X-Auth-User
           - X-Auth-Groups
+        # optional (traefik v3.1+, must match cookie_name): also renew sessions
+        # on API/fetch requests, not just page loads
+        addAuthCookiesToResponse:
+          - _auth

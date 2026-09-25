@@ -146,3 +146,9 @@ seconds — no restart needed. Only `listen` / `secret` changes require one.
 Failed logins are rate-limited per IP and per username (default 5 per 5
 minutes). Sessions are stateless HMAC cookies scoped to the configured
 2nd-level domain; the cookie name is configurable via `cookie_name`.
+Sessions last `session_ttl` (default `72h`) and are renewed automatically
+once more than half of it has elapsed, so active users stay signed in. Page
+loads are bounced through the login page, which renews the cookie and
+redirects straight back — no extra traefik config needed. To also renew on
+API/fetch requests (e.g. long-lived SPAs), list the cookie name under
+`addAuthCookiesToResponse` in the fwdauth middlewares (traefik v3.1+).

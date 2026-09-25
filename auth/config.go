@@ -124,7 +124,7 @@ func (c *Config) applyDefaultsAndValidate() error {
 		return err
 	}
 	if c.SessionTTL <= 0 {
-		c.SessionTTL = duration(24 * time.Hour)
+		c.SessionTTL = duration(72 * time.Hour)
 	}
 	if c.LoginRateLimit.Attempts <= 0 {
 		c.LoginRateLimit.Attempts = 5

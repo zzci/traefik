@@ -23,7 +23,7 @@ domain: example.com
 # Optional. Defaults shown.
 # listen: "127.0.0.1:9091"
 # log_level: info          # debug | info | warn | error (hot-reloadable)
-# session_ttl: 24h
+# session_ttl: 72h         # renewed automatically once half has elapsed
 
 # Brute-force protection: failed logins per IP and per username.
 # login_rate_limit:

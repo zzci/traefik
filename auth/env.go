@@ -18,7 +18,7 @@ import (
 //	AUTH_USERS        user:secret[:g1|g2],user2:...   (replaces the user list)
 //	AUTH_COOKIE_NAME  _auth
 //	AUTH_HOST         auth.example.com
-//	AUTH_SESSION_TTL  24h
+//	AUTH_SESSION_TTL  72h
 //	AUTH_RATE_LIMIT   5/5m
 //
 // A secret starting with "$2" is taken as a bcrypt hash, anything else as a

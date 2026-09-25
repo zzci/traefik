@@ -49,7 +49,7 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.Listen != "127.0.0.1:9091" {
 		t.Errorf("listen default: got %q", cfg.Listen)
 	}
-	if time.Duration(cfg.SessionTTL) != 24*time.Hour {
+	if time.Duration(cfg.SessionTTL) != 72*time.Hour {
 		t.Errorf("session_ttl default: got %v", time.Duration(cfg.SessionTTL))
 	}
 	if cfg.LoginRateLimit.Attempts != 5 || time.Duration(cfg.LoginRateLimit.Window) != 5*time.Minute {

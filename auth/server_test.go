@@ -391,3 +391,150 @@ func TestAllCookiesUseConfiguredDomain(t *testing.T) {
 		t.Fatalf("session cookie domain: %+v", cookie)
 	}
 }
+
+// sessionCookieFrom returns the session cookie set on rec, or nil.
+func sessionCookieFrom(s *server, rec *httptest.ResponseRecorder) *http.Cookie {
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == s.conf().CookieName && c.MaxAge > 0 {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestVerifyRenewsSessionPastHalfTTL(t *testing.T) {
+	s := newTestServer(t)
+	ttl := time.Duration(s.conf().SessionTTL)
+	cookie, _ := loginAs(t, s, "alice", "secret", "", "")
+
+	// before half the TTL: no renewal
+	start := time.Now()
+	s.now = func() time.Time { return start.Add(ttl/2 - time.Minute) }
+	rec := do(s, verifyReq(cookie, "", "text/html"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify: got %d", rec.Code)
+	}
+	if c := sessionCookieFrom(s, rec); c != nil {
+		t.Fatalf("session renewed too early: %+v", c)
+	}
+
+	// past half the TTL: a fresh full-TTL session is issued
+	later := start.Add(ttl/2 + time.Minute)
+	s.now = func() time.Time { return later }
+	rec = do(s, verifyReq(cookie, "", "text/html"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify: got %d", rec.Code)
+	}
+	renewed := sessionCookieFrom(s, rec)
+	if renewed == nil {
+		t.Fatal("session not renewed past half TTL")
+	}
+	if renewed.MaxAge != int(ttl.Seconds()) || renewed.Domain != "example.com" || !renewed.HttpOnly || !renewed.Secure {
+		t.Fatalf("renewed cookie attrs: %+v", renewed)
+	}
+	sess, err := verifySession(testSecret, renewed.Value, later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.User != "alice" || sess.Iat != later.Unix() || sess.Exp != later.Add(ttl).Unix() {
+		t.Fatalf("renewed session: %+v", sess)
+	}
+}
+
+func TestVerifyDoesNotRenewRemovedUser(t *testing.T) {
+	s := newTestServer(t)
+	now := time.Now()
+	token := signSession(testSecret, session{
+		User: "mallory", Iat: now.Add(-20 * time.Hour).Unix(), Exp: now.Add(4 * time.Hour).Unix(),
+	})
+	rec := do(s, verifyReq(&http.Cookie{Name: "_t", Value: token}, "", "text/html"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("still-valid session: got %d", rec.Code)
+	}
+	if c := sessionCookieFrom(s, rec); c != nil {
+		t.Fatal("session renewed for a user no longer in the config")
+	}
+}
+
+func TestVerifyDeniedDoesNotRenew(t *testing.T) {
+	s := newTestServer(t)
+	now := time.Now()
+	token := signSession(testSecret, session{
+		User: "bob", Iat: now.Add(-20 * time.Hour).Unix(), Exp: now.Add(4 * time.Hour).Unix(),
+	})
+	rec := do(s, verifyReq(&http.Cookie{Name: "_t", Value: token}, "?groups=admin", "text/html"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("got %d, want 403", rec.Code)
+	}
+	if c := sessionCookieFrom(s, rec); c != nil {
+		t.Fatal("session renewed on a denied request")
+	}
+}
+
+// pastHalfCookie returns a still-valid session cookie for user that is past
+// half of its lifetime.
+func pastHalfCookie(user string) *http.Cookie {
+	now := time.Now()
+	return &http.Cookie{Name: "_t", Value: signSession(testSecret, session{
+		User: user, Iat: now.Add(-50 * time.Hour).Unix(), Exp: now.Add(22 * time.Hour).Unix(),
+	})}
+}
+
+func TestVerifyNavigationPastHalfRedirectsToRenew(t *testing.T) {
+	s := newTestServer(t)
+	req := verifyReq(pastHalfCookie("alice"), "", "text/html,application/xhtml+xml")
+	req.Header.Set("X-Forwarded-Method", "GET")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	rec := do(s, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status: got %d, want redirect", rec.Code)
+	}
+	want := "https://auth.example.com/login?rd=" + url.QueryEscape("https://app.example.com/dash?x=1")
+	if loc := rec.Header().Get("Location"); loc != want {
+		t.Fatalf("location:\n got %s\nwant %s", loc, want)
+	}
+	// the renewed cookie also rides on the redirect itself
+	if sessionCookieFrom(s, rec) == nil {
+		t.Fatal("no renewed cookie on renewal redirect")
+	}
+}
+
+func TestVerifyNonNavigationPastHalfRenewsInPlace(t *testing.T) {
+	s := newTestServer(t)
+	cases := map[string]func(*http.Request){
+		"api": func(r *http.Request) {
+			r.Header.Set("Accept", "application/json")
+			r.Header.Set("X-Forwarded-Method", "GET")
+		},
+		"post": func(r *http.Request) { r.Header.Set("X-Forwarded-Method", "POST") },
+		"fetch": func(r *http.Request) {
+			r.Header.Set("X-Forwarded-Method", "GET")
+			r.Header.Set("Sec-Fetch-Mode", "cors")
+		},
+	}
+	for name, mod := range cases {
+		req := verifyReq(pastHalfCookie("alice"), "", "text/html")
+		mod(req)
+		rec := do(s, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status %d, want 200", name, rec.Code)
+		}
+		if sessionCookieFrom(s, rec) == nil {
+			t.Fatalf("%s: no renewed cookie", name)
+		}
+	}
+}
+
+func TestLoginFormRenewsPastHalfSessionAndRedirectsBack(t *testing.T) {
+	s := newTestServer(t)
+	req := httptest.NewRequest("GET", "/login?rd="+url.QueryEscape("https://app.example.com/dash"), nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.AddCookie(pastHalfCookie("alice"))
+	rec := do(s, req)
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "https://app.example.com/dash" {
+		t.Fatalf("redirect: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	if sessionCookieFrom(s, rec) == nil {
+		t.Fatal("login page did not renew a past-half session")
+	}
+}

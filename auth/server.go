@@ -160,9 +160,44 @@ func (s *server) handleVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if s.renewIfPastHalf(w, r, sess) && isNavigation(r) && forwardedURL(r) != "" {
+		// Bounce page loads through the login page: it sees the valid
+		// session and redirects straight back, and the renewed cookie
+		// reaches the browser even without addAuthCookiesToResponse.
+		slog.Debug("verify: redirecting to renew session", "user", sess.User, "url", forwardedURL(r))
+		http.Redirect(w, r, s.loginURL(r), http.StatusFound)
+		return
+	}
 	w.Header().Set("X-Auth-User", sess.User)
 	w.Header().Set("X-Auth-Groups", strings.Join(sess.Groups, ","))
 	w.WriteHeader(http.StatusOK)
+}
+
+// renewIfPastHalf re-issues the session cookie once more than half of its
+// lifetime has elapsed, so active users are never logged out, and reports
+// whether it did. Users removed from the config are not renewed and expire
+// naturally. On a 200 from /verify, traefik only passes the cookie on to the
+// browser if the middleware lists it in addAuthCookiesToResponse.
+func (s *server) renewIfPastHalf(w http.ResponseWriter, r *http.Request, sess session) bool {
+	if s.now().Unix()-sess.Iat < (sess.Exp-sess.Iat)/2 {
+		return false
+	}
+	user := s.conf().findUser(sess.User)
+	if user == nil {
+		return false
+	}
+	s.setSessionCookie(w, r, user)
+	slog.Debug("session renewed", "user", user.Username, "ip", clientIP(r))
+	return true
+}
+
+// isNavigation reports whether the forwarded request is a browser page load
+// that can safely be redirected (not fetch/XHR, not a form POST).
+func isNavigation(r *http.Request) bool {
+	mode := r.Header.Get("Sec-Fetch-Mode")
+	return r.Header.Get("X-Forwarded-Method") == http.MethodGet &&
+		strings.Contains(r.Header.Get("Accept"), "text/html") &&
+		(mode == "" || mode == "navigate")
 }
 
 func (s *server) unauthorized(w http.ResponseWriter, r *http.Request) {
@@ -170,11 +205,16 @@ func (s *server) unauthorized(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	http.Redirect(w, r, s.loginURL(r), http.StatusFound)
+}
+
+// loginURL is the login page URL, returning to the forwarded request after.
+func (s *server) loginURL(r *http.Request) string {
 	login := url.URL{Scheme: "https", Host: s.conf().AuthHost, Path: "/login"}
 	if rd := forwardedURL(r); rd != "" {
 		login.RawQuery = url.Values{"rd": {rd}}.Encode()
 	}
-	http.Redirect(w, r, login.String(), http.StatusFound)
+	return login.String()
 }
 
 // forwardedURL reconstructs the original request URL from the
@@ -221,6 +261,7 @@ type loginPage struct {
 func (s *server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 	rd := r.URL.Query().Get("rd")
 	if sess, ok := s.sessionFrom(r); ok {
+		s.renewIfPastHalf(w, r, sess)
 		if target := s.safeRD(rd); target != "" {
 			http.Redirect(w, r, target, http.StatusFound)
 			return
@@ -328,6 +369,21 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.rl.reset(userKey)
+	s.setSessionCookie(w, r, user)
+	slog.Info("login ok", "user", username, "ip", ip)
+	target := s.safeRD(rd)
+	if target == "" {
+		if rd != "" {
+			slog.Warn("login: redirect target rejected by open-redirect guard", "rd", rd)
+		}
+		target = "/login"
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// setSessionCookie issues a fresh full-TTL session cookie for user.
+func (s *server) setSessionCookie(w http.ResponseWriter, r *http.Request, user *User) {
+	c := s.conf()
 	now := s.now()
 	token := signSession(s.secret, session{
 		User:   user.Username,
@@ -345,15 +401,6 @@ func (s *server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	slog.Info("login ok", "user", username, "ip", ip)
-	target := s.safeRD(rd)
-	if target == "" {
-		if rd != "" {
-			slog.Warn("login: redirect target rejected by open-redirect guard", "rd", rd)
-		}
-		target = "/login"
-	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
